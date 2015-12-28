@@ -1,0 +1,15 @@
+server: ldap
+backend: yaml
+
+servers:
+  ldap:
+    Bind: "localhost:8389"
+
+backends:
+  yaml:
+    Path: db.yml
+    BaseDN: "dc=example,dc=com"
+
+auths:
+  pam:
+    Service: go389

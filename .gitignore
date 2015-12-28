@@ -22,3 +22,8 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+
+tmp/
+go389
+.project
