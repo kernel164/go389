@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+
 	"gopkg.in/codegangsta/cli.v1"
 )
 
@@ -18,10 +19,10 @@ var CmdHash = cli.Command{
 	},
 }
 
-func runHash(c *cli.Context) {
+func runHash(c *cli.Context) error {
 	value := c.String("value")
 	if value == "" {
-		return
+		return nil
 	}
 	switch c.String("algo") {
 	case "sha256":
@@ -29,4 +30,6 @@ func runHash(c *cli.Context) {
 		hash.Write([]byte(value))
 		fmt.Println(hex.EncodeToString(hash.Sum(nil)))
 	}
+
+	return nil
 }
