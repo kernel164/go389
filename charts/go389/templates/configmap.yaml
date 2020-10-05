@@ -1,0 +1,10 @@
+{{- if not .Values.configMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "go389.configMap" . }}
+  labels:
+    {{- include "go389.labels" . | nindent 4 }}
+data:
+  {{- toYaml .Values.config | nindent 2 }}
+{{- end }}

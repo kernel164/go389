@@ -6,13 +6,12 @@ A Simple LDAP Server
   - LDAP
   - YAML
 - Pluggable Auth
-  - Simple (hash based - currently sha256)
+  - Simple (hash based - sha256,md5,bcrypt)
   - PAM
 
 ### Build
 ```
-go get
-go build -i -tags "yaml pam"
+task build
 ```
 
 ##### Supported Build Tags
@@ -21,6 +20,7 @@ go build -i -tags "yaml pam"
 - Auth
   - pam
 - App Config
+  - yaml
   - ini
 
 ### Sample App Config
@@ -44,24 +44,39 @@ auths:
 
 ### Sample Backend YAML DB
 ```yaml
-groups:
-  - name: sadmin
-    uid:  9001
-  - name: admin
-    uid:  9002
+
+settings:
+  sa:
+    dn: cn=sa
+    bindAttr: sa
+  user:
+    dn: cn=users
+    objectclass: user
+    bindAttr: mail
+    searchAttr: mail
+  group:
+    dn: cn=groups
+    objectclass: group
+    bindAttr: cn
+    searchAttr: name
+    alias:
+      cn: name
+
+serviceAccounts:
+  sa1:
+    auths:
+      - "bcrypt:$2a$10$dsfdsfdsf.dsfdsfdsfsfdf"
 
 users:
-  - name: suser1
-    uid: 9001
-    gid: 9001
+  test@example.com:
+    attrs:
+      name: test
+      groups:
+        - admin
+    alias:
+      uid: name
     auths:
-      - "sha256:06004fd4f328fab028833d5156da66649be95afd61d41b690de33c1e3e3941a6" # suser1
-      - pam
-  - name: user1
-    uid: 9002
-    gid: 9002
-    auths:
-      - "sha256:0a041b9462caa4a31bac3567e0b6e6fd9100787db2ab433d96f6d178cabfce90" # user1
+      - "sha256:asdfgewy45645645645"
 ```
 
 ### References

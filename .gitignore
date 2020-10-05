@@ -25,5 +25,6 @@ _testmain.go
 
 
 tmp/
-go389
 .project
+bin/
+tryout/

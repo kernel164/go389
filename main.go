@@ -1,21 +1,27 @@
 package main
 
 import (
-	cmd "./cmd"
-	model "./model"
-	"gopkg.in/codegangsta/cli.v1"
 	"os"
+
+	"github.com/alexflint/go-arg"
+	"github.com/kernel164/go389/internal/cmd"
+	"github.com/kernel164/go389/internal/model"
 )
 
+type args struct {
+	Hash   *model.HashArgs   `arg:"subcommand:hash"`
+	Server *model.ServerArgs `arg:"subcommand:server"`
+}
+
 func main() {
-	app := cli.NewApp()
-	app.Name = model.ProgramName
-	app.Version = "0.1.0"
-	app.Author = "kernel164"
-	app.Usage = "A simple LDAP server"
-	app.Commands = []cli.Command{
-		cmd.CmdServer,
-		cmd.CmdHash,
+	args := &args{}
+	p := arg.MustParse(args)
+	switch {
+	case args.Hash != nil:
+		cmd.RunHash(args.Hash)
+	case args.Server != nil:
+		cmd.RunServer(args.Server)
+	default:
+		p.WriteHelp(os.Stdout)
 	}
-	app.Run(os.Args)
 }

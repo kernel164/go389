@@ -1,0 +1,35 @@
+
+settings:
+  sa:
+    dn: cn=sa
+    bindAttr: sa
+  user:
+    dn: cn=users
+    objectclass: user
+    bindAttr: cn
+    searchAttr: mail
+    alias:
+      cn: name
+      uid: name
+  group:
+    dn: cn=groups
+    objectclass: group
+    bindAttr: cn
+    searchAttr: name
+    alias:
+      cn: name
+      uid: name
+
+serviceAccounts:
+  sa1:
+    auths:
+      - "bcrypt:$2a$10$qRySIsJIaaUhLDm3QJrwT.suidfry5jksdfksdfdksf"
+
+users:
+  test@example.com:
+    attrs:
+      name: test
+      groups:
+        - admin
+    auths:
+      - "sha256:06004fd4f328fab028833d5156da66649be95afd61d41b690de33c1e3e3941a6"
