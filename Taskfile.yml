@@ -1,0 +1,35 @@
+version: "3"
+
+vars:
+  GIT_COMMIT:
+    sh: git rev-parse HEAD
+
+tasks:
+  default: ["build"]
+
+  fmt:
+    cmds:
+      - go fmt ./...
+
+  test:
+    cmds:
+      - go test ./...
+
+  docker-build:
+    cmds: 
+      - "docker build --tag go389:latest ."
+
+  docker-push:
+    cmds:
+      - "docker tag go389:latest kernel164/go389:{{.GIT_COMMIT}}"
+      - "docker tag go389:latest kernel164/go389:latest"
+      - "docker push kernel164/go389:{{.GIT_COMMIT}}"
+      - "docker push kernel164/go389:latest"
+
+  build:
+    cmds:
+      - go build -ldflags="-s -w -linkmode internal -extldflags -static" -o bin/go389 main.go
+
+  run:
+    cmds:
+      - go run main.go
