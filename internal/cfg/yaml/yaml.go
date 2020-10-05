@@ -9,12 +9,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type YamlCfgHandler struct {
+type handler struct {
 	model.CfgHandler
-	file YamlCfg
+	config *Config
 }
 
-type YamlCfg struct {
+// Config - config
+type Config struct {
 	Server   string
 	Backend  string
 	Backends map[string]map[string]interface{}
@@ -22,59 +23,60 @@ type YamlCfg struct {
 	Auths    map[string]map[string]interface{}
 }
 
-func NewYamlCfgHandler(name string, file string) (model.CfgHandler, error) {
-	yamlCfg := YamlCfg{}
+// New - config handler
+func New(file string) (model.CfgHandler, error) {
+	yamlCfg := &Config{}
 	content, err := ioutil.ReadFile(file)
 	if err == nil {
-		if unmarshalerr := yaml.Unmarshal(content, &yamlCfg); unmarshalerr != nil {
+		if unmarshalerr := yaml.Unmarshal(content, yamlCfg); unmarshalerr != nil {
 			panic(unmarshalerr)
 			return nil, unmarshalerr
 		}
 	} else {
 		return nil, err
 	}
-	return YamlCfgHandler{file: yamlCfg}, nil
+	return handler{config: yamlCfg}, nil
 }
 
-func (h YamlCfgHandler) GetServer() string {
-	return h.file.Server
+func (h handler) GetServer() string {
+	return h.config.Server
 }
 
-func (h YamlCfgHandler) GetBackend() string {
-	return h.file.Backend
+func (h handler) GetBackend() string {
+	return h.config.Backend
 }
 
-func (h YamlCfgHandler) GetServerType(name string) string {
-	if val, ok := h.file.Servers[name]["Type"].(string); ok {
+func (h handler) GetServerType(name string) string {
+	if val, ok := h.config.Servers[name]["Type"].(string); ok {
 		return val
 	}
 	return name
 }
 
-func (h YamlCfgHandler) GetServerCfg(name string, x interface{}) {
-	mapToStruct(h.file.Servers[name], x)
+func (h handler) GetServerCfg(name string, x interface{}) {
+	mapToStruct(h.config.Servers[name], x)
 }
 
-func (h YamlCfgHandler) GetBackendType(name string) string {
-	if val, ok := h.file.Backends[name]["Type"].(string); ok {
+func (h handler) GetBackendType(name string) string {
+	if val, ok := h.config.Backends[name]["Type"].(string); ok {
 		return val
 	}
 	return name
 }
 
-func (h YamlCfgHandler) GetBackendCfg(name string, x interface{}) {
-	mapToStruct(h.file.Backends[name], x)
+func (h handler) GetBackendCfg(name string, x interface{}) {
+	mapToStruct(h.config.Backends[name], x)
 }
 
-func (h YamlCfgHandler) GetAuthType(name string) string {
-	if val, ok := h.file.Auths[name]["Type"].(string); ok {
+func (h handler) GetAuthType(name string) string {
+	if val, ok := h.config.Auths[name]["Type"].(string); ok {
 		return val
 	}
 	return name
 }
 
-func (h YamlCfgHandler) GetAuthCfg(name string, x interface{}) {
-	mapToStruct(h.file.Auths[name], x)
+func (h handler) GetAuthCfg(name string, x interface{}) {
+	mapToStruct(h.config.Auths[name], x)
 }
 
 func mapToStruct(m map[string]interface{}, x interface{}) {

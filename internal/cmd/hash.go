@@ -3,11 +3,12 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/go-logr/logr"
 	"github.com/kernel164/go389/internal/model"
 	"github.com/kernel164/go389/internal/util"
 )
 
-func RunHash(args *model.HashArgs) error {
+func RunHash(log logr.Logger, args *model.HashArgs) error {
 	value := args.Value
 	if value == "" {
 		return nil

@@ -1,33 +1,19 @@
 package cfg
 
 import (
-	"errors"
-
-	"github.com/kernel164/go389/internal/cfg/ini"
 	"github.com/kernel164/go389/internal/cfg/yaml"
 	"github.com/kernel164/go389/internal/model"
 )
 
 var h model.CfgHandler
 
-func Load(name string, file string) error {
-	cfgHandler, err := getCfgHandler(name, file)
+func Load(file string) error {
+	cfgHandler, err := yaml.New(file)
 	if err != nil {
 		return err
 	}
 	h = cfgHandler
 	return nil
-}
-
-func getCfgHandler(name string, file string) (model.CfgHandler, error) {
-	switch name {
-	case "ini":
-		return ini.NewIniCfgHandler(name, file)
-	case "yaml":
-	case "yml":
-		return yaml.NewYamlCfgHandler(name, file)
-	}
-	return nil, errors.New("cfg not supported")
 }
 
 func GetServer() string {

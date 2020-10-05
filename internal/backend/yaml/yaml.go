@@ -8,9 +8,9 @@ import (
 	"path"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/kernel164/go389/internal/auth"
 	"github.com/kernel164/go389/internal/cfg"
-	"github.com/kernel164/go389/internal/log"
 	"github.com/kernel164/go389/internal/model"
 
 	ber "github.com/nmcclain/asn1-ber"
@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// YUserSettings - user settings
 type YUserSettings struct {
 	DN          string            `yaml:"dn"`
 	ObjectClass string            `yaml:"objectclass"`
@@ -26,6 +27,7 @@ type YUserSettings struct {
 	Alias       map[string]string `yaml:"alias"`
 }
 
+// YGroupSettings - group settings
 type YGroupSettings struct {
 	DN          string            `yaml:"dn"`
 	ObjectClass string            `yaml:"objectclass"`
@@ -34,55 +36,63 @@ type YGroupSettings struct {
 	Alias       map[string]string `yaml:"alias"`
 }
 
+// YSASettings - service account settings
 type YSASettings struct {
 	DN       string `yaml:"dn"`
 	BindAttr string `yaml:"bindAttr"`
 }
 
+// YSettings - settings
 type YSettings struct {
 	SA    YSASettings    `yaml:"sa"`
 	User  YUserSettings  `yaml:"user"`
 	Group YGroupSettings `yaml:"group"`
 }
 
+// YServiceAccount - service account config
 type YServiceAccount struct {
 	Auths []string `yaml:"auths"`
 }
 
+// YUser - user config
 type YUser struct {
 	Attrs map[string]interface{} `yaml:"attrs"`
 	Alias map[string]string      `yaml:"alias"`
 	Auths []string               `yaml:"auths"`
 }
 
+// YGroup - group config
 type YGroup struct {
 	Attrs map[string]interface{} `yaml:"attrs"`
 	Alias map[string]string      `yaml:"alias"`
 }
 
-type YamlLdapDB struct {
+// YLdapDB - yaml ldap db
+type YLdapDB struct {
 	Settings        YSettings                  `yaml:"settings"`
 	ServiceAccounts map[string]YServiceAccount `yaml:"serviceAccounts"`
 	Groups          map[string]YGroup          `yaml:"groups"`
 	Users           map[string]YUser           `yaml:"users"`
 }
 
-type YamlBackendHandler struct {
+type handler struct {
 	model.BackendHandler
-	db  YamlLdapDB
-	cfg YamlBackendSettings
+	log logr.Logger
+	db  YLdapDB
+	cfg BackendSettings
 }
 
-type YamlBackendSettings struct {
+// BackendSettings - backend settings
+type BackendSettings struct {
 	model.BaseBackend
 	Path string
 }
 
-// NewYamlBackendHandler - new yaml backend handler
-func NewYamlBackendHandler(name string, args *model.ServerArgs) (model.BackendHandler, error) {
-	settings := YamlBackendSettings{}
+// New - new yaml backend handler
+func New(name string, log logr.Logger, args *model.ServerArgs) (model.BackendHandler, error) {
+	settings := BackendSettings{}
 	cfg.GetBackendCfg(name, &settings)
-	db := YamlLdapDB{}
+	db := YLdapDB{}
 	dbPath := settings.Path
 	if !strings.HasPrefix(dbPath, "/") {
 		dbPath = path.Join(path.Dir(args.Config), settings.Path)
@@ -95,7 +105,7 @@ func NewYamlBackendHandler(name string, args *model.ServerArgs) (model.BackendHa
 	} else {
 		return nil, err
 	}
-	return YamlBackendHandler{db: db, cfg: settings}, nil
+	return &handler{log: log, db: db, cfg: settings}, nil
 }
 
 func getAuth(part string, bindAttr string, fn func(string) (string, []string, error)) (string, []string, error) {
@@ -107,14 +117,14 @@ func getAuth(part string, bindAttr string, fn func(string) (string, []string, er
 }
 
 // Bind - handler
-func (h YamlBackendHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode ldap.LDAPResultCode, err error) {
+func (h *handler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode ldap.LDAPResultCode, err error) {
 	bindDN = strings.ToLower(bindDN)
-	log.Info("Bind Request", "BindDN", bindDN, "BaseDN", h.cfg.BaseDN, "Remote", conn.RemoteAddr().String())
+	h.log.Info("Bind Request", "BindDN", bindDN, "BaseDN", h.cfg.BaseDN, "Remote", conn.RemoteAddr().String())
 	//stats_frontend.Add("bind_reqs", 1)
 
 	// parse the bindDN
 	if !strings.HasSuffix(bindDN, h.cfg.BaseDN) {
-		log.Warn(fmt.Sprintf("Bind Error: BindDN %s not our BaseDN %s", bindDN, h.cfg.BaseDN))
+		h.log.Info(fmt.Sprintf("Bind Error: BindDN %s not our BaseDN %s", bindDN, h.cfg.BaseDN))
 		return ldap.LDAPResultInvalidCredentials, nil
 	}
 	parts := strings.Split(strings.TrimSuffix(bindDN, ","+h.cfg.BaseDN), ",")
@@ -126,7 +136,7 @@ func (h YamlBackendHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (re
 		return id, nil, nil
 	})
 	if err != nil {
-		log.Warn(fmt.Sprintf("Bind Error: BindDN %s - %s", bindDN, err))
+		h.log.Info(fmt.Sprintf("Bind Error: BindDN %s - %s", bindDN, err))
 		return ldap.LDAPResultInvalidCredentials, nil
 	}
 	if auths == nil {
@@ -142,7 +152,7 @@ func (h YamlBackendHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (re
 		})
 	}
 	if err != nil {
-		log.Warn(fmt.Sprintf("Bind Error: BindDN %s - %s", bindDN, err))
+		h.log.Info(fmt.Sprintf("Bind Error: BindDN %s - %s", bindDN, err))
 		return ldap.LDAPResultInvalidCredentials, nil
 	}
 	authx := false
@@ -159,12 +169,12 @@ func (h YamlBackendHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (re
 		}
 	}
 	if !authx {
-		log.Warn(fmt.Sprintf("Bind Error: invalid credentials as %s from %s", bindDN, conn.RemoteAddr().String()))
+		h.log.Info(fmt.Sprintf("Bind Error: invalid credentials as %s from %s", bindDN, conn.RemoteAddr().String()))
 		return ldap.LDAPResultInvalidCredentials, nil
 	}
 
 	//stats_frontend.Add("bind_successes", 1)
-	log.Info("Bind Success")
+	h.log.Info("Bind Success")
 	return ldap.LDAPResultSuccess, nil
 }
 
@@ -175,7 +185,7 @@ func toStringValue(value interface{}) string {
 	case *string:
 		return *v
 	}
-	log.Info(fmt.Sprintf("toStringValue.Type=%T", value))
+	//h.log.Info(fmt.Sprintf("toStringValue.Type=%T", value))
 	return fmt.Sprintf("%v", value)
 }
 
@@ -192,16 +202,16 @@ func toStringArray(value interface{}) []string {
 		}
 		return x
 	}
-	log.Info(fmt.Sprintf("toAttrValue.Type=%T", value))
+	//h.log.Info(fmt.Sprintf("toAttrValue.Type=%T", value))
 	return []string{fmt.Sprintf("%v", value)}
 }
 
 // Search - search handler
-func (h YamlBackendHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldap.ServerSearchResult, err error) {
+func (h *handler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldap.ServerSearchResult, err error) {
 	bindDN = strings.ToLower(bindDN)
 	//baseDN := strings.ToLower("," + h.baseDN)
 	searchBaseDN := strings.ToLower(searchReq.BaseDN)
-	log.Info("Search Request", "BindDN", bindDN, "From", conn.RemoteAddr().String(), "Req", searchReq)
+	h.log.Info("Search Request", "BindDN", bindDN, "From", conn.RemoteAddr().String(), "Req", searchReq)
 	//stats_frontend.Add("search_reqs", 1)
 
 	// validate the user is authenticated and has appropriate access
@@ -230,13 +240,13 @@ func (h YamlBackendHandler) Search(bindDN string, searchReq ldap.SearchRequest, 
 	case h.db.Settings.User.ObjectClass:
 		userID, ok := m[h.db.Settings.User.SearchAttr]
 		if !ok {
-			log.Warn(fmt.Sprintf("Search Error: Missing user info in search. attr=%s", h.db.Settings.User.SearchAttr))
+			h.log.Info(fmt.Sprintf("Search Error: Missing user info in search. attr=%s", h.db.Settings.User.SearchAttr))
 			return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("Search Error: user not found %s", userID)
 		}
 		// find the user
 		user, found := h.db.Users[userID]
 		if !found {
-			log.Warn(fmt.Sprintf("Search Error: User %s not found.", user))
+			h.log.Info(fmt.Sprintf("Search Error: User %s not found.", user))
 			return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("Search Error: user not found %s", userID)
 		}
 		entries = append(entries, h.getUserEntry(userID))
@@ -245,7 +255,7 @@ func (h YamlBackendHandler) Search(bindDN string, searchReq ldap.SearchRequest, 
 		// find the user
 		user, found := h.db.Users[userName] // find user by member
 		if !found {
-			log.Warn(fmt.Sprintf("Search Error: User %s not found.", user))
+			h.log.Info(fmt.Sprintf("Search Error: User %s not found.", user))
 			return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("Search Error: user not found %s", userName)
 		}
 		groups, ok := user.Attrs["groups"]
@@ -254,19 +264,19 @@ func (h YamlBackendHandler) Search(bindDN string, searchReq ldap.SearchRequest, 
 				entries = append(entries, h.getGroupEntry(grp))
 			}
 		} else {
-			log.Warn(fmt.Sprintf("Search Error: User %s doesn't have groups attribute.", user))
+			h.log.Info(fmt.Sprintf("Search Error: User %s doesn't have groups attribute.", user))
 			return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("Search Error: User %s doesn't have groups attribute", userName)
 		}
 	default:
 		return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("Search Error: unhandled filter type: %s [%s]", objectclass, searchReq.Filter)
 	}
 	//stats_frontend.Add("search_successes", 1)
-	log.Info("Search OK")
+	h.log.Info("Search OK")
 	/*
 		for _, e := range entries {
-			log.Info(e.DN)
+			h.log.Info(e.DN)
 			for _, a := range e.Attributes {
-				log.Info(a.Name, a.Values)
+				h.log.Info(a.Name, a.Values)
 			}
 		}
 	*/
@@ -278,7 +288,7 @@ func (h YamlBackendHandler) Search(bindDN string, searchReq ldap.SearchRequest, 
 	}, nil
 }
 
-func (h YamlBackendHandler) getUserEntry(userID string) *ldap.Entry {
+func (h *handler) getUserEntry(userID string) *ldap.Entry {
 	userAttrs := map[string]interface{}{}
 	userAlias := map[string]string{}
 	user, ok := h.db.Users[userID]
@@ -295,7 +305,7 @@ func (h YamlBackendHandler) getUserEntry(userID string) *ldap.Entry {
 	}
 }
 
-func (h YamlBackendHandler) getGroupEntry(groupID string) *ldap.Entry {
+func (h *handler) getGroupEntry(groupID string) *ldap.Entry {
 	groupAttrs := map[string]interface{}{}
 	groupAlias := map[string]string{}
 	group, ok := h.db.Groups[groupID]
@@ -340,7 +350,7 @@ func buildDN(attrs map[string]interface{}, attr string, subDN string, baseDN str
 }
 
 // Close - close
-func (h YamlBackendHandler) Close(boundDn string, conn net.Conn) error {
+func (h *handler) Close(boundDn string, conn net.Conn) error {
 	//stats_frontend.Add("closes", 1)
 	return nil
 }

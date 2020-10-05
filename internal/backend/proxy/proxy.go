@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/go-logr/logr"
 	"github.com/kernel164/go389/internal/cfg"
 	"github.com/kernel164/go389/internal/model"
 
@@ -18,25 +19,28 @@ type session struct {
 	ldap *ldap.Conn
 }
 
-type ProxyBackendHandler struct {
+type handler struct {
 	model.BackendHandler
+	log      logr.Logger
 	sessions map[string]session
 	lock     sync.Mutex
 	ldapHost string
 }
 
-type ProxyBackendSettings struct {
+// BackendSettings - backend settings
+type BackendSettings struct {
 	model.BaseBackend
 	Host string
 }
 
-func NewProxyBackendHandler(name string) (model.BackendHandler, error) {
-	settings := ProxyBackendSettings{}
+// New - new proxy backend handler
+func New(name string, log logr.Logger) (model.BackendHandler, error) {
+	settings := BackendSettings{}
 	cfg.GetBackendCfg(name, &settings)
-	return ProxyBackendHandler{sessions: make(map[string]session), ldapHost: settings.Host}, nil
+	return &handler{sessions: make(map[string]session), log: log, ldapHost: settings.Host}, nil
 }
 
-func (h ProxyBackendHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldap.LDAPResultCode, error) {
+func (h *handler) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldap.LDAPResultCode, error) {
 	s, err := h.getSession(conn)
 	if err != nil {
 		return ldap.LDAPResultOperationsError, err
@@ -47,7 +51,7 @@ func (h ProxyBackendHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (l
 	return ldap.LDAPResultSuccess, nil
 }
 
-func (h ProxyBackendHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn net.Conn) (ldap.ServerSearchResult, error) {
+func (h *handler) Search(boundDN string, searchReq ldap.SearchRequest, conn net.Conn) (ldap.ServerSearchResult, error) {
 	s, err := h.getSession(conn)
 	if err != nil {
 		return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, nil
@@ -66,7 +70,7 @@ func (h ProxyBackendHandler) Search(boundDN string, searchReq ldap.SearchRequest
 	return ldap.ServerSearchResult{sr.Entries, []string{}, []ldap.Control{}, ldap.LDAPResultSuccess}, nil
 }
 
-func (h ProxyBackendHandler) Close(boundDN string, conn net.Conn) error {
+func (h *handler) Close(boundDN string, conn net.Conn) error {
 	conn.Close() // close connection to the server when then client is closed
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -81,7 +85,7 @@ func connID(conn net.Conn) string {
 	return string(sha)
 }
 
-func (h ProxyBackendHandler) getSession(conn net.Conn) (session, error) {
+func (h *handler) getSession(conn net.Conn) (session, error) {
 	id := connID(conn)
 	h.lock.Lock()
 	s, ok := h.sessions[id] // use server connection if it exists

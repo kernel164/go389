@@ -1,43 +1,31 @@
 package cmd
 
 import (
-	"path/filepath"
-
+	"github.com/go-logr/logr"
 	"github.com/kernel164/go389/internal/backend"
 	"github.com/kernel164/go389/internal/cfg"
-	"github.com/kernel164/go389/internal/log"
 	"github.com/kernel164/go389/internal/model"
 	"github.com/kernel164/go389/internal/server"
 )
 
-func RunServer(args *model.ServerArgs) error {
-	config := args.Config
-	extn := filepath.Ext(config)
-	extn = extn[1:]
-
-	if err := log.Init(""); err != nil {
-		return err
-	}
-
-	//log.Info("Loading config", "file", config, "type", extn)
-
+func RunServer(log logr.Logger, args *model.ServerArgs) error {
 	// load config
-	if err := cfg.Load(extn, config); err != nil {
-		log.Error(err.Error())
+	if err := cfg.Load(args.Config); err != nil {
+		log.Error(err, "error loading config")
 		return err
 	}
 
 	// backend
-	backendHandler, err := backend.GetBackendHandler(cfg.GetBackend(), args)
+	backendHandler, err := backend.GetBackendHandler(cfg.GetBackend(), log, args)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error(err, "error getting backend")
 		return err
 	}
 
 	// server
-	serverHandler, err := server.GetServerHandler(cfg.GetServer(), backendHandler)
+	serverHandler, err := server.New(cfg.GetServer(), log, backendHandler)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error(err, "error getting server")
 		return err
 	}
 
